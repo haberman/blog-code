@@ -36,24 +36,23 @@ int YMDToJulian_Fortran(int y, int m, int d) {
 // Copyright (c) 2009-2011, Google Inc.
 // SPDX-License-Identifier: BSD-3-Clause
 
-static int DivRoundUp(int n, int d) {
-  return (n + d - 1) / d;
-}
-
 /* YMDToUnix_Table(1970, 1, 1) == 1970-01-01 == 0. */
 int YMDToUnix_Table(int year, int month, int day) {
   static const uint16_t month_yday[12] = {0,   31,  59,  90,  120, 151,
                                           181, 212, 243, 273, 304, 334};
-  int febs_since_0 = month > 2 ? year + 1 : year;
-  int leap_days_since_0 = DivRoundUp(febs_since_0, 4) -
-                          DivRoundUp(febs_since_0, 100) +
-                          DivRoundUp(febs_since_0, 400);
-  int days_since_0 =
-      365 * year + month_yday[month - 1] + (day - 1) + leap_days_since_0;
+  int year_base = 4800;       /* Before minimum year, divisible by 100 & 400 */
+  uint32_t epoch = 2472692;   /* Days between year_base and 1970 (Unix epoch) */
+  uint32_t febs_since_base = year + year_base - (month <= 2 ? 1 : 0);
+  uint32_t leap_days_since_base = 1 + (febs_since_base / 4) -
+                                      (febs_since_base / 100) +
+                                      (febs_since_base / 400);
+  uint32_t days_since_base =
+      365 * (year + year_base) + month_yday[month - 1] + (day - 1)
+      + leap_days_since_base;
 
   /* Convert from 0-epoch (0001-01-01 BC) to Unix Epoch (1970-01-01 AD).
    * Since the "BC" system does not have a year zero, 1 BC == year zero. */
-  return days_since_0 - 719528;
+  return days_since_base - epoch;
 }
 
 int YMDToUnix_Fast(int y, int m, int d) {
@@ -106,7 +105,7 @@ int main(int argc, char** argv) {
       printf("YMDToUnix_Fast(%d, %d, %d) = %d != %d\n", y, m, d,
              YMDToUnix_Fast(y, m, d), unix_day);
     }
-    if (jd >= 1721058 && YMDToUnix_Table(y, m, d) != unix_day) {
+    if (YMDToUnix_Table(y, m, d) != unix_day) {
       printf("YMDToUnix_Table(%d, %d, %d) = %d != %d\n", y, m, d,
              YMDToUnix_Table(y, m, d), unix_day);
     }
