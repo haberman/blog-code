@@ -1,5 +1,6 @@
 
-#include <benchmark/benchmark.h>
+#include <stdint.h>
+#include <limits>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Algorithms as published in
@@ -7,7 +8,7 @@
 //     Processing Calendar Dates," Communications of the Association of
 //     Computing Machines, vol. 11 (1968), p. 657.  */
 
-static void JulianToYMD_Fortran(int jd, int *y, int *m, int *d) {
+void JulianToYMD_Fortran(int jd, int *y, int *m, int *d) {
   int L = jd + 68569;
   int N = 4 * L / 146097;
   L = L - (146097 * N + 3) / 4;
@@ -40,81 +41,45 @@ int YMDToJulian_Fortran(int y, int m, int d) {
 int YMDToUnix_Table(int year, int month, int day) {
   static const uint16_t month_yday[12] = {0,   31,  59,  90,  120, 151,
                                           181, 212, 243, 273, 304, 334};
-  int year_base = 4800;       /* Before minimum year, divisible by 100 & 400 */
-  uint32_t epoch = 2472692;   /* Days between year_base and 1970 (Unix epoch) */
-  uint32_t febs_since_base = year + year_base - (month <= 2 ? 1 : 0);
-  uint32_t leap_days_since_base = 1 + (febs_since_base / 4) -
-                                      (febs_since_base / 100) +
-                                      (febs_since_base / 400);
-  uint32_t days_since_base =
-      365 * (year + year_base) + month_yday[month - 1] + (day - 1)
-      + leap_days_since_base;
-
-  /* Convert from 0-epoch (0001-01-01 BC) to Unix Epoch (1970-01-01 AD).
-   * Since the "BC" system does not have a year zero, 1 BC == year zero. */
-  return days_since_base - epoch;
+  uint32_t year_adj = year + 4800;  /* Ensure positive year, multiple of 400. */
+  uint32_t febs = year_adj - (month <= 2 ? 1 : 0);  /* Februaries since base. */
+  uint32_t leap_days = 1 + (febs / 4) - (febs / 100) + (febs / 400);
+  uint32_t days = 365 * year_adj + leap_days + month_yday[month - 1] + day - 1;
+  return days - 2472692;  /* Adjust to Unix epoch. */
 }
 
 int YMDToUnix_Fast(int y, int m, int d) {
-  unsigned year_base = 4800;  /* Before minimum year, divisible by 100 & 400 */
-  unsigned epoch = 2472632;   /* Days between year_base and 1970 (Unix epoch) */
-  unsigned carry = (unsigned)m - 3 > m;
-  unsigned m_adj = m - 3 + (carry ? 12 : 0);   /* Month, counting from March */
-  unsigned y_adj = y + year_base - carry;  /* Year, positive and March-based */
-  unsigned base_days = (365 * 4 + 1) * y_adj / 4;    /* Approx days for year */
-  unsigned centuries = y_adj / 100;
-  unsigned extra_leap_days = (3 * centuries + 3) / 4; /* base_days correction */
-  unsigned year_days = (367 * (m_adj + 1)) / 12 - 30;  /* Counting from March */
-  return base_days - extra_leap_days + year_days + (d - 1) - epoch;
+  const uint32_t year_base = 4800;    /* Before min year, multiple of 400. */
+  const uint32_t m_adj = m - 3;       /* March-based month. */
+  const uint32_t carry = m_adj > m ? 1 : 0;
+  const uint32_t adjust = carry ? 12 : 0;
+  const uint32_t y_adj = y + year_base - carry;
+  const uint32_t month_days = ((m_adj + adjust) * 62719 + 769) / 2048;
+  const uint32_t leap_days = y_adj / 4 - y_adj / 100 + y_adj / 400;
+  return y_adj * 365 + leap_days + month_days + (d - 1) - 2472632;
 }
 
-// Benchmarking code. //////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// Algorithm as published by Howard Hinnant on
+//   http://howardhinnant.github.io/date_algorithms.html
 
-static void BM_YMDToJulian_Fortran(benchmark::State& state) {
-  for (int i = 0; state.KeepRunning();) {
-    i = YMDToJulian_Fortran(i, 1, 1) & 0xffff;
-    benchmark::DoNotOptimize(i);
-  }
+template <class Int>
+constexpr
+Int
+days_from_civil(Int y, unsigned m, unsigned d) noexcept
+{
+    static_assert(std::numeric_limits<unsigned>::digits >= 18,
+             "This algorithm has not been ported to a 16 bit unsigned integer");
+    static_assert(std::numeric_limits<Int>::digits >= 20,
+             "This algorithm has not been ported to a 16 bit signed integer");
+    y -= m <= 2;
+    const Int era = (y >= 0 ? y : y-399) / 400;
+    const unsigned yoe = static_cast<unsigned>(y - era * 400);      // [0, 399]
+    const unsigned doy = (153*(m + (m > 2 ? -3 : 9)) + 2)/5 + d-1;  // [0, 365]
+    const unsigned doe = yoe * 365 + yoe/4 - yoe/100 + doy;         // [0, 146096]
+    return era * 146097 + static_cast<Int>(doe) - 719468;
 }
-BENCHMARK(BM_YMDToJulian_Fortran);
 
-static void BM_YMDToUnix_Table(benchmark::State& state) {
-  for (int i = 0; state.KeepRunning();) {
-    i = YMDToUnix_Table(i, 1, 1) & 0xffff;
-    benchmark::DoNotOptimize(i);
-  }
-}
-BENCHMARK(BM_YMDToUnix_Table);
-
-static void BM_YMDToUnix_Fast(benchmark::State& state) {
-  for (int i = 0; state.KeepRunning();) {
-    i = YMDToUnix_Fast(i, 1, 1) & 0xffff;
-    benchmark::DoNotOptimize(i);
-  }
-}
-BENCHMARK(BM_YMDToUnix_Fast);
-
-// main() / verification code. /////////////////////////////////////////////////
-
-int main(int argc, char** argv) {
-  for (int jd = 0; jd < 10000000; jd++) {
-    int unix_day = jd - 2440588;
-    int y, m, d;
-    JulianToYMD_Fortran(jd, &y, &m, &d);
-    if (YMDToUnix_Fast(y, m, d) != unix_day) {
-      printf("YMDToUnix_Fast(%d, %d, %d) = %d != %d\n", y, m, d,
-             YMDToUnix_Fast(y, m, d), unix_day);
-    }
-    if (YMDToUnix_Table(y, m, d) != unix_day) {
-      printf("YMDToUnix_Table(%d, %d, %d) = %d != %d\n", y, m, d,
-             YMDToUnix_Table(y, m, d), unix_day);
-    }
-    if (YMDToJulian_Fortran(y, m, d) != jd) {
-      printf("YMDToJulian_Fortran(%d, %d, %d) = %d != %d\n", y, m, d,
-             YMDToJulian_Fortran(y, m, d), jd);
-    }
-  }
-
-  benchmark::Initialize(&argc, argv);
-  benchmark::RunSpecifiedBenchmarks();
+int YMDToUnix_DaysFromCivil(int y, int m, int d) {
+  return days_from_civil<int>(y, m, d);
 }
