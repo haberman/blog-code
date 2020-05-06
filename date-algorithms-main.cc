@@ -1,23 +1,18 @@
 
 #include <benchmark/benchmark.h>
 
-void JulianToYMD_Fortran(int jd, int *y, int *m, int *d);
-int YMDToJulian_Fortran(int y, int m, int d);
-int YMDToUnix_Table(int year, int month, int day);
-int YMDToUnix_DaysFromCivil(int y, int m, int d);
-int YMDToUnix_Fast(int y, int m, int d);
+void JulianToYMD_Fortran(int jd, int* y, int* m, int* d);
+int64_t YMDToJulian_Fortran(int year, int month, int day, int h, int m, int s);
+int64_t YMDToUnix_Table(int year, int month, int day, int h, int m, int s);
+int64_t YMDToUnix_DaysFromCivil(int year, int month, int d, int h, int m, int s);
+int64_t YMDToUnix_Fast(int year, int month, int d, int h, int m, int s);
 
 // Benchmarking code. //////////////////////////////////////////////////////////
 
-template <int F(int, int, int)>
-int64_t UnixTime(int year, int month, int day, int h, int m, int s) {
-  return F(year, month, day) + (h * 3600) + (m * 60) + s;
-}
-
-template <int F(int, int, int)>
+template <int64_t F(int, int, int, int, int, int)>
 void BenchmarkAlgorithm(benchmark::State& state) {
   for (unsigned i = 0; state.KeepRunning(); i++) {
-    int64_t val = UnixTime<F>(i, i & 7, i, i, i, i);
+    int64_t val = F(i, i & 7, i, i, i, i);
     benchmark::DoNotOptimize(val);
   }
 }
@@ -42,7 +37,7 @@ static void BM_YMDToUnix_DaysFromCivil(benchmark::State& state) {
 }
 BENCHMARK(BM_YMDToUnix_DaysFromCivil);
 
-static void BM_gmtime_libc(benchmark::State& state) {
+static void BM_timegm_libc(benchmark::State& state) {
   for (unsigned i = 0; state.KeepRunning(); i++) {
     struct tm time;
     time.tm_sec = 0;
@@ -56,7 +51,7 @@ static void BM_gmtime_libc(benchmark::State& state) {
     benchmark::DoNotOptimize(value);
   }
 }
-BENCHMARK(BM_gmtime_libc);
+BENCHMARK(BM_timegm_libc);
 
 // main() / verification code. /////////////////////////////////////////////////
 
@@ -68,25 +63,27 @@ int main(int argc, char** argv) {
   benchmark::DoNotOptimize(&YMDToUnix_DaysFromCivil);
 
   // Check all algorithms for correctness.
-  for (int jd = 0; jd < 10000000; jd++) {
-    int unix_day = jd - 2440588;
+  for (int64_t jd = 0; jd < 10000000; jd++) {
+    int64_t unix_day = jd - 2440588;
+    int64_t unix_time = unix_day * 86400;
+    int64_t julian_time = jd * 86400;
     int y, m, d;
     JulianToYMD_Fortran(jd, &y, &m, &d);
-    if (YMDToUnix_Fast(y, m, d) != unix_day) {
-      printf("YMDToUnix_Fast(%d, %d, %d) = %d != %d\n", y, m, d,
-             YMDToUnix_Fast(y, m, d), unix_day);
+    if (YMDToUnix_Fast(y, m, d, 0, 0, 0) != unix_time) {
+      printf("YMDToUnix_Fast(%d, %d, %d) = %ld != %ld\n", y, m, d,
+             YMDToUnix_Fast(y, m, d, 0, 0, 0), unix_time);
     }
-    if (YMDToUnix_Table(y, m, d) != unix_day) {
-      printf("YMDToUnix_Table(%d, %d, %d) = %d != %d\n", y, m, d,
-             YMDToUnix_Table(y, m, d), unix_day);
+    if (YMDToUnix_Table(y, m, d, 0, 0, 0) != unix_time) {
+      printf("YMDToUnix_Table(%d, %d, %d) = %ld != %ld\n", y, m, d,
+             YMDToUnix_Table(y, m, d, 0, 0, 0), unix_time);
     }
-    if (YMDToUnix_DaysFromCivil(y, m, d) != unix_day) {
-      printf("YMDToUnix_DaysFromCivil(%d, %d, %d) = %d != %d\n", y, m, d,
-             YMDToUnix_DaysFromCivil(y, m, d), unix_day);
+    if (YMDToUnix_DaysFromCivil(y, m, d, 0, 0, 0) != unix_time) {
+      printf("YMDToUnix_DaysFromCivil(%d, %d, %d) = %ld != %ld\n", y, m, d,
+             YMDToUnix_DaysFromCivil(y, m, d, 0, 0, 0), unix_time);
     }
-    if (YMDToJulian_Fortran(y, m, d) != jd) {
-      printf("YMDToJulian_Fortran(%d, %d, %d) = %d != %d\n", y, m, d,
-             YMDToJulian_Fortran(y, m, d), jd);
+    if (YMDToJulian_Fortran(y, m, d, 0, 0, 0) != julian_time) {
+      printf("YMDToJulian_Fortran(%d, %d, %d) = %ld != %ld\n", y, m, d,
+             YMDToJulian_Fortran(y, m, d, 0, 0, 0), julian_time);
     }
   }
 

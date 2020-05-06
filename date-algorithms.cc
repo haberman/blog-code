@@ -25,7 +25,7 @@ void JulianToYMD_Fortran(int jd, int *y, int *m, int *d) {
   *d = K;
 }
 
-int YMDToJulian_Fortran(int y, int m, int d) {
+int jd(int y, int m, int d) {
   return d - 32075 + 1461*(y + 4800 + (m - 14)/12)/4
         + 367*(m - 2 - (m - 14)/12*12)/12 - 3
              *((y + 4900 + (m - 14)/12)/100)/4;
@@ -38,7 +38,7 @@ int YMDToJulian_Fortran(int y, int m, int d) {
 // SPDX-License-Identifier: BSD-3-Clause
 
 /* YMDToUnix_Table(1970, 1, 1) == 1970-01-01 == 0. */
-int YMDToUnix_Table(int year, int month, int day) {
+int epoch_days_table(int year, int month, int day) {
   static const uint16_t month_yday[12] = {0,   31,  59,  90,  120, 151,
                                           181, 212, 243, 273, 304, 334};
   uint32_t year_adj = year + 4800;  /* Ensure positive year, multiple of 400. */
@@ -48,7 +48,7 @@ int YMDToUnix_Table(int year, int month, int day) {
   return days - 2472692;  /* Adjust to Unix epoch. */
 }
 
-int YMDToUnix_Fast(int y, int m, int d) {
+int epoch_days_fast(int y, int m, int d) {
   const uint32_t year_base = 4800;    /* Before min year, multiple of 400. */
   const uint32_t m_adj = m - 3;       /* March-based month. */
   const uint32_t carry = m_adj > m ? 1 : 0;
@@ -80,6 +80,32 @@ days_from_civil(Int y, unsigned m, unsigned d) noexcept
     return era * 146097 + static_cast<Int>(doe) - 719468;
 }
 
-int YMDToUnix_DaysFromCivil(int y, int m, int d) {
+// Adapting the functions above to timegm() semantics.
+
+template <int F(int, int, int)>
+int64_t UnixTime(int year, int month, int day, int h, int m, int s) {
+  int days = F(year, month, day);
+  unsigned secs = (h * 3600) + (m * 60) + s;
+  return days * int64_t{86400} + secs;
+}
+
+int64_t YMDToJulian_Fortran(int year, int month, int day, int h, int m, int s) {
+  return UnixTime<jd>(year, month, day, h, m, s);
+}
+
+int64_t YMDToUnix_Table(int year, int month, int day, int h, int m, int s) {
+  return UnixTime<epoch_days_table>(year, month, day, h, m, s);
+}
+
+int64_t YMDToUnix_Fast(int year, int month, int day, int h, int m, int s) {
+  return UnixTime<epoch_days_fast>(year, month, day, h, m, s);
+}
+
+static int days_from_civil_signed(int y, int m, int d) {
   return days_from_civil<int>(y, m, d);
+}
+
+int64_t YMDToUnix_DaysFromCivil(int year, int month, int day, int h, int m,
+                                int s) {
+  return UnixTime<days_from_civil_signed>(year, month, day, h, m, s);
 }
