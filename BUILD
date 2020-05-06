@@ -9,4 +9,5 @@ cc_binary(
     deps = [
         "@com_github_google_benchmark//:benchmark_main",
     ],
+    copts = ["-std=c++14"],  # Hinnant algorithm requires this.
 )

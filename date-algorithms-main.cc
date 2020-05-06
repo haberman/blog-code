@@ -1,5 +1,6 @@
 
 #include <benchmark/benchmark.h>
+#include <inttypes.h>
 
 void JulianToYMD_Fortran(int jd, int* y, int* m, int* d);
 int64_t YMDToJulian_Fortran(int year, int month, int day, int h, int m, int s);
@@ -57,9 +58,9 @@ BENCHMARK(BM_timegm_libc);
 
 int main(int argc, char** argv) {
   // Ensure non-inlined versions are linked in so we can size-profile them.
+  benchmark::DoNotOptimize(&YMDToJulian_Fortran);
   benchmark::DoNotOptimize(&YMDToUnix_Fast);
   benchmark::DoNotOptimize(&YMDToUnix_Table);
-  benchmark::DoNotOptimize(&YMDToJulian_Fortran);
   benchmark::DoNotOptimize(&YMDToUnix_DaysFromCivil);
 
   // Check all algorithms for correctness.
@@ -70,20 +71,20 @@ int main(int argc, char** argv) {
     int y, m, d;
     JulianToYMD_Fortran(jd, &y, &m, &d);
     if (YMDToUnix_Fast(y, m, d, 0, 0, 0) != unix_time) {
-      printf("YMDToUnix_Fast(%d, %d, %d) = %ld != %ld\n", y, m, d,
-             YMDToUnix_Fast(y, m, d, 0, 0, 0), unix_time);
+      printf("YMDToUnix_Fast(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
+             y, m, d, YMDToUnix_Fast(y, m, d, 0, 0, 0), unix_time);
     }
     if (YMDToUnix_Table(y, m, d, 0, 0, 0) != unix_time) {
-      printf("YMDToUnix_Table(%d, %d, %d) = %ld != %ld\n", y, m, d,
-             YMDToUnix_Table(y, m, d, 0, 0, 0), unix_time);
+      printf("YMDToUnix_Table(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
+             y, m, d, YMDToUnix_Table(y, m, d, 0, 0, 0), unix_time);
     }
     if (YMDToUnix_DaysFromCivil(y, m, d, 0, 0, 0) != unix_time) {
-      printf("YMDToUnix_DaysFromCivil(%d, %d, %d) = %ld != %ld\n", y, m, d,
-             YMDToUnix_DaysFromCivil(y, m, d, 0, 0, 0), unix_time);
+      printf("YMDToUnix_DaysFromCivil(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
+             y, m, d, YMDToUnix_DaysFromCivil(y, m, d, 0, 0, 0), unix_time);
     }
     if (YMDToJulian_Fortran(y, m, d, 0, 0, 0) != julian_time) {
-      printf("YMDToJulian_Fortran(%d, %d, %d) = %ld != %ld\n", y, m, d,
-             YMDToJulian_Fortran(y, m, d, 0, 0, 0), julian_time);
+      printf("YMDToJulian_Fortran(%d, %d, %d) = %" PRId64 " != %" PRId64 "\n",
+             y, m, d, YMDToJulian_Fortran(y, m, d, 0, 0, 0), julian_time);
     }
   }
 
