@@ -8,6 +8,17 @@ int64_t YMDToUnix_Table(int year, int month, int day, int h, int m, int s);
 int64_t YMDToUnix_DaysFromCivil(int year, int month, int d, int h, int m, int s);
 int64_t YMDToUnix_Fast(int year, int month, int d, int h, int m, int s);
 
+static int64_t YMDToUnix_Libc(int year, int month, int d, int h, int m, int s) {
+  struct tm time;
+  time.tm_sec = s;
+  time.tm_min = m;
+  time.tm_hour = h;
+  time.tm_mday = d;
+  time.tm_mon = month - 1;
+  time.tm_year = year - 1900;
+  return timegm(&time);
+}
+
 // Benchmarking code. //////////////////////////////////////////////////////////
 
 template <int64_t F(int, int, int, int, int, int)>
@@ -39,18 +50,7 @@ static void BM_YMDToUnix_DaysFromCivil(benchmark::State& state) {
 BENCHMARK(BM_YMDToUnix_DaysFromCivil);
 
 static void BM_timegm_libc(benchmark::State& state) {
-  for (unsigned i = 0; state.KeepRunning(); i++) {
-    struct tm time;
-    time.tm_sec = 0;
-    time.tm_min = 0;
-    time.tm_hour = 0;
-    time.tm_mday = 0;
-    time.tm_mon = 0;
-    time.tm_year = (int)i - 1900;
-
-    time_t value = timegm(&time);
-    benchmark::DoNotOptimize(value);
-  }
+  BenchmarkAlgorithm<YMDToUnix_Libc>(state);
 }
 BENCHMARK(BM_timegm_libc);
 
@@ -69,6 +69,8 @@ int main(int argc, char** argv) {
     int64_t unix_time = unix_day * 86400;
     int64_t julian_time = jd * 86400;
     int y, m, d;
+    bool test_gmtime = true;
+
     JulianToYMD_Fortran(jd, &y, &m, &d);
     if (YMDToUnix_Fast(y, m, d, 0, 0, 0) != unix_time) {
       printf("YMDToUnix_Fast(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
@@ -85,6 +87,18 @@ int main(int argc, char** argv) {
     if (YMDToJulian_Fortran(y, m, d, 0, 0, 0) != julian_time) {
       printf("YMDToJulian_Fortran(%d, %d, %d) = %" PRId64 " != %" PRId64 "\n",
              y, m, d, YMDToJulian_Fortran(y, m, d, 0, 0, 0), julian_time);
+    }
+
+#ifdef __APPLE__
+    // On macOS timegm() returns -1 for years before 1900.
+    // Also we don't want to run it too many times or it takes too long to get
+    // to the benchmarking part.
+    test_gmtime = y >= 1900 && y < 1950;
+#endif
+
+    if (test_gmtime && YMDToUnix_Libc(y, m, d, 0, 0, 0) != unix_time) {
+      printf("YMDToUnix_Libc(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
+             y, m, d, YMDToUnix_Libc(y, m, d, 0, 0, 0), unix_time);
     }
   }
 

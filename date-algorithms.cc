@@ -3,7 +3,7 @@
 #include <limits>
 
 ////////////////////////////////////////////////////////////////////////////////
-// Algorithms as published in
+// This is a translation of the Fortran algorithms published in
 //   Fliegel, H. F., and Van Flandern, T. C., "A Machine Algorithm for
 //     Processing Calendar Dates," Communications of the Association of
 //     Computing Machines, vol. 11 (1968), p. 657.  */
@@ -62,6 +62,7 @@ int epoch_days_fast(int y, int m, int d) {
 ////////////////////////////////////////////////////////////////////////////////
 // Algorithm as published by Howard Hinnant on
 //   http://howardhinnant.github.io/date_algorithms.html
+// Article includes the text: "Consider these donated to the public domain."
 
 template <class Int>
 constexpr
@@ -80,7 +81,7 @@ days_from_civil(Int y, unsigned m, unsigned d) noexcept
     return era * 146097 + static_cast<Int>(doe) - 719468;
 }
 
-// Adapting the functions above to timegm() semantics.
+// Adapting the functions above to timegm() semantics. /////////////////////////
 
 template <int F(int, int, int)>
 int64_t UnixTime(int year, int month, int day, int h, int m, int s) {
