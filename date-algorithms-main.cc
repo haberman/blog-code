@@ -24,7 +24,11 @@ static int64_t YMDToUnix_Libc(int year, int month, int d, int h, int m, int s) {
 template <int64_t F(int, int, int, int, int, int)>
 void BenchmarkAlgorithm(benchmark::State& state) {
   for (unsigned i = 0; state.KeepRunning(); i++) {
-    int64_t val = F(i, i & 7, i, i, i, i);
+    int year = i & 0x7ff;
+#ifdef __APPLE__
+    year = 1900 + (i & 0x7f);
+#endif
+    int64_t val = F(year, i & 7, i & 0xf, i & 0xf, i & 0x1f, i & 0x1f);
     benchmark::DoNotOptimize(val);
   }
 }
@@ -39,15 +43,15 @@ static void BM_YMDToUnix_Table(benchmark::State& state) {
 }
 BENCHMARK(BM_YMDToUnix_Table);
 
-static void BM_YMDToUnix_Fast(benchmark::State& state) {
-  BenchmarkAlgorithm<YMDToUnix_Fast>(state);
-}
-BENCHMARK(BM_YMDToUnix_Fast);
-
 static void BM_YMDToUnix_DaysFromCivil(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_DaysFromCivil>(state);
 }
 BENCHMARK(BM_YMDToUnix_DaysFromCivil);
+
+static void BM_YMDToUnix_Fast(benchmark::State& state) {
+  BenchmarkAlgorithm<YMDToUnix_Fast>(state);
+}
+BENCHMARK(BM_YMDToUnix_Fast);
 
 static void BM_timegm_libc(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_Libc>(state);
