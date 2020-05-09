@@ -90,8 +90,12 @@ int64_t UnixTime(int year, int month, int day, int h, int m, int s) {
   return days * int64_t{86400} + secs;
 }
 
-int64_t YMDToJulian_Fortran(int year, int month, int day, int h, int m, int s) {
-  return UnixTime<jd>(year, month, day, h, m, s);
+static int unix_day_fortran(int y, int m, int d) {
+  return jd(y, m, d) - 2440588;
+}
+
+int64_t YMDToUnix_Fortran(int year, int month, int day, int h, int m, int s) {
+  return UnixTime<unix_day_fortran>(year, month, day, h, m, s);
 }
 
 int64_t YMDToUnix_Table(int year, int month, int day, int h, int m, int s) {

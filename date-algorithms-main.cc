@@ -3,7 +3,7 @@
 #include <inttypes.h>
 
 void JulianToYMD_Fortran(int jd, int* y, int* m, int* d);
-int64_t YMDToJulian_Fortran(int year, int month, int day, int h, int m, int s);
+int64_t YMDToUnix_Fortran(int year, int month, int day, int h, int m, int s);
 int64_t YMDToUnix_Table(int year, int month, int day, int h, int m, int s);
 int64_t YMDToUnix_DaysFromCivil(int year, int month, int d, int h, int m, int s);
 int64_t YMDToUnix_Fast(int year, int month, int d, int h, int m, int s);
@@ -33,10 +33,10 @@ void BenchmarkAlgorithm(benchmark::State& state) {
   }
 }
 
-static void BM_YMDToJulian_Fortran(benchmark::State& state) {
-  BenchmarkAlgorithm<YMDToJulian_Fortran>(state);
+static void BM_YMDToUnix_Fortran(benchmark::State& state) {
+  BenchmarkAlgorithm<YMDToUnix_Fortran>(state);
 }
-BENCHMARK(BM_YMDToJulian_Fortran);
+BENCHMARK(BM_YMDToUnix_Fortran);
 
 static void BM_YMDToUnix_Table(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_Table>(state);
@@ -60,51 +60,74 @@ BENCHMARK(BM_timegm_libc);
 
 // main() / verification code. /////////////////////////////////////////////////
 
+template <int64_t F(int, int, int, int, int, int)>
+static void TestAlgorithm(int year, int month, int day, int h, int m, int s,
+                          int64_t unix_time, const char *name) {
+  int64_t val = F(year, month, day, h, m, s);
+  if (val != unix_time) {
+    printf("%s(%d, %d, %d, %d, %d, %d) = %" PRId64 " != %" PRId64 "\n",
+           name, year, month, day, h, m, s, val, unix_time);
+  }
+}
+
+static void TestAllAlgorithms(int year, int month, int day, int h, int m, int s,
+                              int64_t unix_time) {
+  bool test_gmtime = true;
+
+  TestAlgorithm<YMDToUnix_Fast>(year, month, day, h, m, s, unix_time,
+                                "YMDToUnix_Fast");
+  TestAlgorithm<YMDToUnix_Table>(year, month, day, h, m, s, unix_time,
+                                 "YMDToUnix_Table");
+  TestAlgorithm<YMDToUnix_DaysFromCivil>(year, month, day, h, m, s, unix_time,
+                                         "YMDToUnix_DaysFromCivil");
+  TestAlgorithm<YMDToUnix_Fortran>(year, month, day, h, m, s, unix_time,
+                                   "YMDToUnix_Fortran");
+
+#ifdef __APPLE__
+  // On macOS timegm() returns -1 for years before 1900.
+  // Also we don't want to run it too many times or it takes too long to get
+  // to the benchmarking part.
+  test_gmtime = y >= 1900 && y < 1950;
+#endif
+
+  if (test_gmtime) {
+    TestAlgorithm<YMDToUnix_Libc>(year, month, day, h, m, s, unix_time,
+                                  "YMDToUnix_Libc");
+  }
+}
+
+static void TestAllAlgorithmsForJulianDay(int64_t jd) {
+  int64_t unix_day = jd - 2440588;
+  int64_t unix_time = unix_day * 86400;
+  int y, m, d;
+
+  JulianToYMD_Fortran(jd, &y, &m, &d);
+  TestAllAlgorithms(y, m, d, 0, 0, 0, unix_time);
+}
+
 int main(int argc, char** argv) {
   // Ensure non-inlined versions are linked in so we can size-profile them.
-  benchmark::DoNotOptimize(&YMDToJulian_Fortran);
+  benchmark::DoNotOptimize(&YMDToUnix_Fortran);
   benchmark::DoNotOptimize(&YMDToUnix_Fast);
   benchmark::DoNotOptimize(&YMDToUnix_Table);
   benchmark::DoNotOptimize(&YMDToUnix_DaysFromCivil);
 
   // Check all algorithms for correctness.
   for (int64_t jd = 0; jd < 10000000; jd++) {
-    int64_t unix_day = jd - 2440588;
-    int64_t unix_time = unix_day * 86400;
-    int64_t julian_time = jd * 86400;
-    int y, m, d;
-    bool test_gmtime = true;
-
-    JulianToYMD_Fortran(jd, &y, &m, &d);
-    if (YMDToUnix_Fast(y, m, d, 0, 0, 0) != unix_time) {
-      printf("YMDToUnix_Fast(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
-             y, m, d, YMDToUnix_Fast(y, m, d, 0, 0, 0), unix_time);
-    }
-    if (YMDToUnix_Table(y, m, d, 0, 0, 0) != unix_time) {
-      printf("YMDToUnix_Table(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
-             y, m, d, YMDToUnix_Table(y, m, d, 0, 0, 0), unix_time);
-    }
-    if (YMDToUnix_DaysFromCivil(y, m, d, 0, 0, 0) != unix_time) {
-      printf("YMDToUnix_DaysFromCivil(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
-             y, m, d, YMDToUnix_DaysFromCivil(y, m, d, 0, 0, 0), unix_time);
-    }
-    if (YMDToJulian_Fortran(y, m, d, 0, 0, 0) != julian_time) {
-      printf("YMDToJulian_Fortran(%d, %d, %d) = %" PRId64 " != %" PRId64 "\n",
-             y, m, d, YMDToJulian_Fortran(y, m, d, 0, 0, 0), julian_time);
-    }
-
-#ifdef __APPLE__
-    // On macOS timegm() returns -1 for years before 1900.
-    // Also we don't want to run it too many times or it takes too long to get
-    // to the benchmarking part.
-    test_gmtime = y >= 1900 && y < 1950;
-#endif
-
-    if (test_gmtime && YMDToUnix_Libc(y, m, d, 0, 0, 0) != unix_time) {
-      printf("YMDToUnix_Libc(%d, %d, %d) = %" PRId64 " != % " PRId64 "\n",
-             y, m, d, YMDToUnix_Libc(y, m, d, 0, 0, 0), unix_time);
-    }
+    TestAllAlgorithmsForJulianDay(jd);
   }
+
+  // jd=1000000000 -> 2733194-11-27
+  TestAllAlgorithms(1000000, 1, 1, 0, 0, 0, 31494784780800);
+
+  // Test around a leap second boundary.
+  // UTC                      Unix Time
+  // 1998-12-31T23:59:59.00   915148799
+  // 1998-12-31T23:59:60.00   915148800
+  // 1999-01-01T00:00:00.00   915148800
+  TestAllAlgorithms(1998, 12, 31, 23, 59, 59, 915148799);
+  TestAllAlgorithms(1998, 12, 31, 23, 59, 60, 915148800);
+  TestAllAlgorithms(1999, 1, 1, 0, 0, 0, 915148800);
 
   benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
