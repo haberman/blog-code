@@ -87,7 +87,7 @@ static void TestAllAlgorithms(int year, int month, int day, int h, int m, int s,
   // On macOS timegm() returns -1 for years before 1900.
   // Also we don't want to run it too many times or it takes too long to get
   // to the benchmarking part.
-  test_gmtime = y >= 1900 && y < 1950;
+  test_gmtime = year >= 1900 && year < 1950;
 #endif
 
   if (test_gmtime) {
