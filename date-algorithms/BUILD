@@ -4,7 +4,7 @@ cc_binary(
     testonly = 1,
     srcs = [
         "algorithms.cc",
-        "main.cc",
+        "benchmark.cc",
     ],
     deps = [
         "@com_github_google_benchmark//:benchmark_main",

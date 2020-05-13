@@ -33,30 +33,36 @@ void BenchmarkAlgorithm(benchmark::State& state) {
   }
 }
 
+#ifdef THREADS
+#define THREAD_ARG ->Threads(THREADS)
+#else
+#define THREAD_ARG
+#endif
+
 static void BM_YMDToUnix_Fortran(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_Fortran>(state);
 }
-BENCHMARK(BM_YMDToUnix_Fortran);
+BENCHMARK(BM_YMDToUnix_Fortran) THREAD_ARG;
 
 static void BM_YMDToUnix_Table(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_Table>(state);
 }
-BENCHMARK(BM_YMDToUnix_Table);
+BENCHMARK(BM_YMDToUnix_Table) THREAD_ARG;
 
 static void BM_YMDToUnix_DaysFromCivil(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_DaysFromCivil>(state);
 }
-BENCHMARK(BM_YMDToUnix_DaysFromCivil);
+BENCHMARK(BM_YMDToUnix_DaysFromCivil) THREAD_ARG;
 
 static void BM_YMDToUnix_Fast(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_Fast>(state);
 }
-BENCHMARK(BM_YMDToUnix_Fast);
+BENCHMARK(BM_YMDToUnix_Fast) THREAD_ARG;
 
 static void BM_timegm_libc(benchmark::State& state) {
   BenchmarkAlgorithm<YMDToUnix_Libc>(state);
 }
-BENCHMARK(BM_timegm_libc);
+BENCHMARK(BM_timegm_libc) THREAD_ARG;
 
 // main() / verification code. /////////////////////////////////////////////////
 
